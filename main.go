@@ -7,12 +7,14 @@ import (
 	"fmt"
 	"os"
 	"strings"
+	"time"
 )
 
 var correctAnswer = 0
 
 func main() {
 	csvFilename := flag.String("csv", "problems.csv", "the csv file that contain quizes")
+	timeLimit := flag.Int("limit", 30, "the time needed to solve this problems in second")
 	flag.Parse()
 
 	file, err := os.Open(*csvFilename)
@@ -29,24 +31,41 @@ func main() {
 
 	problems := parseLines(lines)
 
+	timer := time.NewTimer(time.Duration(*timeLimit) * time.Second)
+
 	for i, quiz := range problems {
-		checkQuiz(quiz.question, quiz.answer, i)
+
+		getanswerChan := make(chan string)
+		go getAnswer(quiz.question, i, getanswerChan)
+
+		select {
+		case <-timer.C:
+			fmt.Printf("You Answerd %d out of %d \n", correctAnswer, len(problems))
+			return
+		case answer := <-getanswerChan:
+			checkAnswer(quiz.answer, answer)
+		}
 	}
 
 	fmt.Printf("You Answerd %d out of %d \n", correctAnswer, len(problems))
+
+}
+
+// # get answer function
+
+func getAnswer(question string, index int, getAnswer chan string) {
+	reader := bufio.NewScanner(os.Stdin)
+	fmt.Printf("Problem %d: %s = ", index+1, question)
+	reader.Scan()
+	getAnswer <- reader.Text()
 }
 
 // # checkQuiz function
 
-func checkQuiz(question, answer string, index int) {
-	reader := bufio.NewScanner(os.Stdin)
-	fmt.Printf("Problem %d: %s = \n", index+1, question)
-	reader.Scan()
-
-	if strings.TrimSpace(reader.Text()) == answer {
+func checkAnswer(answer string, response string) {
+	if strings.TrimSpace(response) == answer {
 		correctAnswer++
 	}
-
 }
 
 // # parseLines
